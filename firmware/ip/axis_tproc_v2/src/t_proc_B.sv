@@ -529,7 +529,7 @@ generate
          wave_t_gr[ind_wfifo]  = W_RESULT[ind_wfifo][47];
          wave_pop[ind_wfifo]   = 0;
          wave_pop_prev[ind_wfifo] = wave_pop_r[ind_wfifo] | wave_pop_r2[ind_wfifo] | wave_pop_r3[ind_wfifo];
-         if (~fifo_wave_empty[ind_wfifo])
+         if (t_time_en_r & ~fifo_wave_empty[ind_wfifo])
             if ( ( wave_t_eq[ind_wfifo] | wave_t_gr[ind_wfifo] ) & ~wave_pop_prev[ind_wfifo] ) 
                wave_pop      [ind_wfifo] = 1'b1 ;
       end //ALWAYS
@@ -587,7 +587,7 @@ generate
         data_t_gr[ind_dfifo]  = D_RESULT[ind_dfifo][47];
          data_pop[ind_dfifo] = 0;
          data_pop_prev[ind_dfifo] = data_pop_r[ind_dfifo] | data_pop_r2[ind_dfifo] | data_pop_r3[ind_dfifo];
-         if (~fifo_data_empty[ind_dfifo] )
+         if (t_time_en_r & ~fifo_data_empty[ind_dfifo] )
             if ( ( data_t_eq[ind_dfifo] | data_t_gr[ind_dfifo] ) & ~data_pop_prev[ind_dfifo] ) 
                data_pop      [ind_dfifo] = 1'b1 ;
       end //ALWAYS
