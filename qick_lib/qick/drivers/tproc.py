@@ -335,6 +335,8 @@ class AxisTProc64x32_x8(SocIp):
             #COmpatible with previous Version
             self.DMEM_N = int(description['parameters']['DMEM_AW']) 
 
+        def read_tproc_out(self):
+            return (self.tproc_ext_dt1_o, self.tproc_ext_dt2_o)
       
         # Configure this driver with links to its memory and DMA.
         def configure(self, mem, axi_dma):
