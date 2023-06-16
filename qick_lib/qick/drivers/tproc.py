@@ -83,8 +83,9 @@ class AxisTProc64x32_x8(SocIp):
         # program memory address size (log2 of the number of 64-bit words, though the actual memory is usually smaller)
         self.PMEM_N = int(description['parameters']['PMEM_N'])
 
+        self.cfg['dmem_size'] = 2**self.DMEM_N
+
     # Configure this driver with links to its memory and DMA.
-    # TODO: is this "mem" argument actually used? we are not setting it to anything sensible.
     def configure(self, mem, axi_dma):
         # Program memory.
         self.mem = mem
@@ -92,14 +93,16 @@ class AxisTProc64x32_x8(SocIp):
         # dma
         self.dma = axi_dma
 
+        self.cfg['pmem_size'] = self.mem.mmio.length//8
+
     def configure_connections(self, soc):
-        self.output_pins = []
-        self.start_pin = None
+        self.cfg['output_pins'] = []
+        self.cfg['start_pin'] = None
         try:
             ((port),) = soc.metadata.trace_sig(self.fullpath, 'start')
             # check if the start pin is driven by a port of the top-level design
             if len(port)==1:
-                self.start_pin = port[0]
+                self.cfg['start_pin'] = port[0]
         except:
             pass
         # search for the trigger port
@@ -111,7 +114,7 @@ class AxisTProc64x32_x8(SocIp):
             except: # skip disconnected tProc outputs
                 continue
             if soc.metadata.mod2type(block) == "axis_set_reg":
-                self.trig_output = i
+                self.cfg['trig_output'] = i
                 ((block, port),) = soc.metadata.trace_sig(block, 'dout')
                 for iPin in range(16):
                     try:
@@ -119,7 +122,7 @@ class AxisTProc64x32_x8(SocIp):
                         if len(ports)==1 and len(ports[0])==1:
                             # it's an FPGA pin, save it
                             pinname = ports[0][0]
-                            self.output_pins.append((iPin, pinname))
+                            self.cfg['output_pins'].append((iPin, pinname))
                     except KeyError:
                         pass
 
@@ -539,11 +542,11 @@ class Axis_QICK_Proc(SocIp):
         np.copyto(self.buff_wr[:length], buff_in)
         #Start operation
         if (mem_sel==1):       # WRITE PMEM
-            self.tproc_cfg       = self.tproc_cfg | 7
+            self.tproc_cfg     |= 7
         elif (mem_sel==2):     # WRITE DMEM
-            self.tproc_cfg       = self.tproc_cfg | 11
+            self.tproc_cfg     |= 11
         elif (mem_sel==3):     # WRITE WMEM
-            self.tproc_cfg       = self.tproc_cfg | 15
+            self.tproc_cfg     |= 15
         else:
             raise RuntimeError('Destination Memeory error should be  PMEM=1, DMEM=2, WMEM=3 current Value : %d' % (mem_sel))
 
@@ -555,8 +558,7 @@ class Axis_QICK_Proc(SocIp):
         self.logger.debug('DMA write 3')
         
         # End Operation
-        self.tproc_cfg       = self.tproc_cfg & ~63
-
+        self.tproc_cfg         &= ~63
 
     def read_mem(self,mem_sel, addr=0, length=100):
         """
@@ -571,17 +573,17 @@ class Axis_QICK_Proc(SocIp):
         length : int
             Number of words to read
         """
-        # Configure Memory arbiter. (Read DMEM)
+    # Configure Memory arbiter. (Read DMEM)
         self.mem_addr        = addr
         self.mem_len         = length
 
         #Start operation
         if (mem_sel==1):       # READ PMEM
-            self.tproc_cfg       = self.tproc_cfg | 5
+            self.tproc_cfg     |= 5
         elif (mem_sel==2):     # READ DMEM
-            self.tproc_cfg       = self.tproc_cfg | 9
+            self.tproc_cfg     |= 9
         elif (mem_sel==3):     # READ WMEM
-            self.tproc_cfg       = self.tproc_cfg | 13
+            self.tproc_cfg     |= 13
         else:
             raise RuntimeError('Source Memeory error should be PMEM=1, DMEM=2, WMEM=3 current Value : %d' % (mem_sel))
 
@@ -593,7 +595,7 @@ class Axis_QICK_Proc(SocIp):
         self.logger.debug('DMA read 3')
         
         # End Operation
-        self.tproc_cfg       = self.tproc_cfg & ~63
+        self.tproc_cfg         &= ~63
 
         # truncate and copy
         return self.buff_rd[:length].copy()
