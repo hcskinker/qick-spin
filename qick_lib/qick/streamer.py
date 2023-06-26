@@ -113,14 +113,15 @@ class DataStreamer():
 
                 # if the tproc is configured for internal start, this will start the program
                 # for external start, the program will not start until a start pulse is received
-                self.soc.tproc.run()
+                self.soc.tproc.proc_start()
 
                 # Keep streaming data until you get all of it
                 while last_reps < total_reps:
                     if self.stop_flag.is_set():
                         print("streamer loop: got stop flag")
                         break
-                    reps, _ = self.soc.tproc.read_tproc_out()
+                    reps, _ = self.soc.tproc.read_core_w()
+
                     # wait until either you've gotten a full stride of measurements or you've finished (so you don't go crazy trying to download every measurement)
                     if reps >= min(last_reps+stride, total_reps):
                         addr = last_count % self.soc.get_avg_max_length(0)

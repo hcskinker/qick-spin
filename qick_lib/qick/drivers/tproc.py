@@ -408,6 +408,10 @@ class Axis_QICK_Proc(SocIp):
                     except KeyError:
                         pass
 
+    def read_core_w(self):
+        """Read the core_w1, core_w2 outputs from the tproc."""
+        self.read_sel = 1
+        return (self.tproc_r_dt1, self.tproc_r_dt2)
 
     def port2ch(self, portname):
         """
