@@ -98,7 +98,6 @@ class AxisTProc64x32_x8(SocIp):
     def configure_connections(self, soc):
         self.cfg['output_pins'] = []
         self.cfg['start_pin'] = None
-        self.cfg['f_time'] = soc.metadata.get_fclk(self.fullpath, "aclk")
         try:
             ((port),) = soc.metadata.trace_sig(self.fullpath, 'start')
             # check if the start pin is driven by a port of the top-level design
@@ -107,14 +106,15 @@ class AxisTProc64x32_x8(SocIp):
         except:
             pass
         # search for the trigger port
-        for iPort in range(8):
+        for i in range(8):
             # what block does this output drive?
             # add 1, because output 0 goes to the DMA
             try:
-                ((block, port),) = soc.metadata.trace_bus(self.fullpath, 'm%d_axis' % (iPort+1))
+                ((block, port),) = soc.metadata.trace_bus(self.fullpath, 'm%d_axis' % (i+1))
             except: # skip disconnected tProc outputs
                 continue
             if soc.metadata.mod2type(block) == "axis_set_reg":
+                self.cfg['trig_output'] = i
                 ((block, port),) = soc.metadata.trace_sig(block, 'dout')
                 for iPin in range(16):
                     try:
@@ -122,7 +122,7 @@ class AxisTProc64x32_x8(SocIp):
                         if len(ports)==1 and len(ports[0])==1:
                             # it's an FPGA pin, save it
                             pinname = ports[0][0]
-                            self.cfg['output_pins'].append(('output', iPort, iPin, pinname))
+                            self.cfg['output_pins'].append((iPin, pinname))
                     except KeyError:
                         pass
 
@@ -133,8 +133,7 @@ class AxisTProc64x32_x8(SocIp):
         """
         # port names are of the form 'm2_axis' (for outputs) and 's2_axis (for inputs)
         # subtract 1 to get the output channel number (s0/m0 goes to the DMA)
-        chtype = {'m':'output', 's':'input'}[portname[0]]
-        return int(portname.split('_')[0][1:])-1, chtype
+        return int(portname.split('_')[0][1:])-1
 
     def start(self):
         """
@@ -153,42 +152,6 @@ class AxisTProc64x32_x8(SocIp):
         """
         # we only write the high half of each program word, the low half doesn't matter
         np.copyto(self.mem.mmio.array[1::2],np.uint32(0x3F000000))
-
-    def load_bin_program(self, binprog, reset=False):
-        """
-        Write the program to the tProc program memory.
-
-        :param reset: Reset the tProc before writing the program.
-        :type reset: bool
-        """
-        if reset: self.reset()
-
-        # cast the program words to 64-bit uints
-        self.binprog = np.array(binprog, dtype=np.uint64)
-        # reshape to 32 bits to match the program memory
-        self.binprog = np.frombuffer(self.binprog, np.uint32)
-
-        self.reload_program()
-
-    def reload_program(self):
-        """
-        Write the most recently written program to the tProc program memory.
-        This is normally useful after a reset (which erases the program memory)
-        """
-        # write the program to memory with a fast copy
-        np.copyto(self.mem.mmio.array[:len(self.binprog)], self.binprog)
-
-    def start_src(self, src):
-        """
-        Sets the start source of tProc
-
-        :param src: start source "internal" or "external"
-        :type src: string
-        """
-        # set internal-start register to "init"
-        # otherwise we might start the tProc on a transition from external to internal start
-        self.start_reg = 0
-        self.start_src_reg = {"internal": 0, "external": 1}[src]
 
     def single_read(self, addr):
         """
@@ -279,7 +242,6 @@ class AxisTProc64x32_x8(SocIp):
         self.mem_start_reg = 0
 
         return buff
-
 
 class Axis_QICK_Proc(SocIp):
     """
@@ -405,8 +367,7 @@ class Axis_QICK_Proc(SocIp):
     def configure_connections(self, soc):
         self.cfg['output_pins'] = []
         self.cfg['start_pin'] = None
-        self.cfg['f_core'] = soc.metadata.get_fclk(self.fullpath, "c_clk_i")
-        self.cfg['f_time'] = soc.metadata.get_fclk(self.fullpath, "t_clk_i")
+        self.cfg['trig_output'] = 0 
         try:
             ((port),) = soc.metadata.trace_sig(self.fullpath, 'start')
             self.start_pin = port[0]
@@ -419,28 +380,31 @@ class Axis_QICK_Proc(SocIp):
         for iPin in range(self['out_trig_qty']):
             try:
                 ports = soc.metadata.trace_sig(self.fullpath, "trig_%d_o"%(iPin))
+                print(iPin, ports)
                 if len(ports)==1 and len(ports[0])==1:
                     # it's an FPGA pin, save it
                     pinname = ports[0][0]
-                    self.cfg['output_pins'].append(('trig', iPin, 0, pinname))
+                    self.cfg['output_pins'].append((iPin, pinname))
             except KeyError:
                 pass
        # search for the trigger port
-        for iPort in range(self['out_dport_qty']):
+        for i in range(self['out_dport_qty']):
             # what block does this output drive?
+            # add 1, because output 0 goes to the DMA
             try:
-                ((block, port),) = soc.metadata.trace_sig(self.fullpath, 'port_%d_dt_o' % (iPort))
+                ((block, port),) = soc.metadata.trace_sig(self.fullpath, 'port_%d_dt_o' % (i))
             except: # skip disconnected tProc outputs
                 continue
-            if soc.metadata.mod2type(block) == "qick_vec2bit":
-                n_outputs = int(soc.metadata.get_param(block, 'OUT_QTY'))
-                for iPin in range(n_outputs):
+            if soc.metadata.mod2type(block).startswith("vect2bits"):
+                self.cfg['trig_output'] = i
+                for iPin in range(16):
                     try:
+                        #print(iPin, trace_net(sigparser, block, "dout%d"%(iPin)))
                         ports = soc.metadata.trace_sig(block, "dout%d"%(iPin))
                         if len(ports)==1 and len(ports[0])==1:
                             # it's an FPGA pin, save it
                             pinname = ports[0][0]
-                            self.cfg['output_pins'].append(('dport', iPort, iPin, pinname))
+                            self.cfg['output_pins'].append((iPin, pinname))
                     except KeyError:
                         pass
 
@@ -451,17 +415,11 @@ class Axis_QICK_Proc(SocIp):
 
     def port2ch(self, portname):
         """
-        Translate a port name to a channel number and type
+        Translate a port name to a channel number.
         Used in connection mapping.
         """
-        words = portname.split('_')
-        if words[-1] == 'axis':
-            # port names are of the form 'm2_axis' (for outputs) and 's2_axis' (for inputs)
-            chtype = {'m':'wport', 's':'input'}[words[0][0]]
-            return int(words[0][1:]), chtype
-        else:
-            chtype = {'trig':'trig', 'port':'dport'}[words[0]]
-            return int(words[1]), chtype
+        # port names are of the form 'm2_axis' (for outputs) and 's2_axis (for inputs)
+        return int(portname.split('_')[0][1:])
 
                     
     def time_reset(self):
