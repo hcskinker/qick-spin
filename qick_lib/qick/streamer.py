@@ -153,7 +153,7 @@ class DataStreamer():
                 #if last_count==total_count: print("streamer loop: normal completion")
 
             except Exception as e:
-                print(f'streamer loop got exception:\n{e}')
+                print("streamer loop: got exception")
                 # traceback.print_exc()
                 # pass the exception to the main thread
                 self.error_queue.put(e)
